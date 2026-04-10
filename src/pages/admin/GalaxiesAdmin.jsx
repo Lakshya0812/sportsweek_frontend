@@ -3,7 +3,7 @@
  */
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Star } from 'lucide-react';
+import { Plus, Pencil, Trash2, Star, Hash } from 'lucide-react';
 import { api } from '../../api/client.js';
 import Spinner from '../../components/Spinner.jsx';
 import ErrorMessage from '../../components/ErrorMessage.jsx';
@@ -59,12 +59,58 @@ function GalaxyForm({ initial, onSubmit, onCancel, loading }) {
   );
 }
 
+// ── Points Form ───────────────────────────────────────────────────────────
+
+function PointsForm({ galaxy, onSubmit, onCancel, loading }) {
+  const [points, setPoints] = useState(String(galaxy.total_points));
+  const [error, setError] = useState('');
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    const val = parseInt(points, 10);
+    if (isNaN(val) || val < 0) { setError('Enter a valid non-negative number.'); return; }
+    onSubmit(val);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {error && (
+        <div className="p-3 bg-red-900/30 border border-red-700/50 rounded-lg text-sm text-red-400">
+          {error}
+        </div>
+      )}
+      <p className="text-sm text-slate-400">
+        Manually override the points total for <span className="text-slate-100 font-semibold">{galaxy.name}</span>.
+        This bypasses the match-result calculation.
+      </p>
+      <div>
+        <label className="label">Points</label>
+        <input
+          type="number"
+          min="0"
+          value={points}
+          onChange={(e) => setPoints(e.target.value)}
+          className="input"
+          autoFocus
+        />
+      </div>
+      <div className="flex justify-end gap-3 pt-2">
+        <button type="button" onClick={onCancel} className="btn-secondary">Cancel</button>
+        <button type="submit" disabled={loading} className="btn-primary">
+          {loading ? 'Saving...' : 'Set Points'}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────
 
 export default function GalaxiesAdmin() {
   const qc = useQueryClient();
   const [modal, setModal] = useState(null); // null | { mode: 'create' | 'edit', galaxy?: {} }
   const [deleteId, setDeleteId] = useState(null);
+  const [pointsGalaxy, setPointsGalaxy] = useState(null);
 
   const { data: galaxies, isLoading, isError } = useQuery({
     queryKey: ['galaxies'],
@@ -85,6 +131,11 @@ export default function GalaxiesAdmin() {
   const deleteMutation = useMutation({
     mutationFn: api.deleteGalaxy,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['galaxies'] }); setDeleteId(null); },
+  });
+
+  const setPointsMutation = useMutation({
+    mutationFn: ({ id, points }) => api.setGalaxyPoints(id, points),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['galaxies'] }); setPointsGalaxy(null); },
   });
 
   return (
@@ -140,6 +191,13 @@ export default function GalaxiesAdmin() {
                     <td className="py-3 px-4">
                       <div className="flex items-center justify-center gap-2">
                         <button
+                          onClick={() => setPointsGalaxy(g)}
+                          className="p-2 text-galaxy-400 hover:text-galaxy-300 hover:bg-slate-700 rounded-lg transition-colors"
+                          title="Edit Points"
+                        >
+                          <Hash size={14} />
+                        </button>
+                        <button
                           onClick={() => setModal({ mode: 'edit', galaxy: g })}
                           className="p-2 text-slate-400 hover:text-slate-100 hover:bg-slate-700 rounded-lg transition-colors"
                           title="Edit"
@@ -183,6 +241,21 @@ export default function GalaxiesAdmin() {
           />
           {(createMutation.isError || updateMutation.isError) && (
             <ErrorMessage message="Failed to save. Please try again." />
+          )}
+        </Modal>
+      )}
+
+      {/* Edit Points modal */}
+      {pointsGalaxy && (
+        <Modal title={`Edit Points — ${pointsGalaxy.name}`} onClose={() => setPointsGalaxy(null)}>
+          <PointsForm
+            galaxy={pointsGalaxy}
+            loading={setPointsMutation.isPending}
+            onCancel={() => setPointsGalaxy(null)}
+            onSubmit={(points) => setPointsMutation.mutate({ id: pointsGalaxy.id, points })}
+          />
+          {setPointsMutation.isError && (
+            <ErrorMessage message="Failed to update points. Please try again." />
           )}
         </Modal>
       )}

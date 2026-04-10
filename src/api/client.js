@@ -75,6 +75,7 @@ export const api = {
     });
   },
   deleteGalaxy: (id) => apiClient.delete(`/galaxies/${id}/`),
+  setGalaxyPoints: (id, points) => apiClient.patch(`/galaxies/${id}/set-points/`, { total_points: points }),
 
   // Sports
   getSports: (params) => apiClient.get('/sports/', { params }),
